@@ -1368,7 +1368,7 @@ export default function FinancialPlan() {
             )}
             <span className={`fp-save-status ${saveStatus}`}>
               {saveStatus === "saving" && "Saving…"}
-              {saveStatus === "saved" && "✓ Synced to this device"}
+              {saveStatus === "saved" && "✓ Saved to your account"}
               {saveStatus === "unavailable" && "Storage unavailable — changes won't persist"}
             </span>
           </Section>
@@ -1596,7 +1596,7 @@ export default function FinancialPlan() {
         </div>
         <span className={`fp-save-status ${saveStatus}`}>
           {saveStatus === "saving" && "Saving…"}
-          {saveStatus === "saved" && "✓ Synced to this device"}
+          {saveStatus === "saved" && "✓ Saved to your account"}
           {saveStatus === "unavailable" && "Storage unavailable — changes won't persist"}
         </span>
       </div>
