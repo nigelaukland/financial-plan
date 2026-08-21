@@ -5,6 +5,21 @@ function AuthShell({ title, children }) {
   return (
     <div className="fp-root fp-auth-wrap">
       <style>{`
+        .fp-auth-wrap {
+          --ink: #12181F;
+          --panel: #1A222C;
+          --panel-2: #212B37;
+          --brass: #C7A05E;
+          --text: #EDE7DA;
+          --text-dim: #9BA3AE;
+          --rule: #2C3742;
+          --good: #7BA383;
+          --bad: #C06A57;
+          font-family: 'Inter', sans-serif;
+          background: var(--ink);
+          color: var(--text);
+          min-height: 100vh;
+        }
         .fp-auth-card {
           max-width: 340px;
           margin: 18vh auto 0;
@@ -29,14 +44,19 @@ function AuthShell({ title, children }) {
           color: var(--text-dim);
         }
         .fp-auth-field input {
-          background: var(--panel-2);
-          border: 1px solid var(--rule);
+          background: var(--ink);
+          border: 1px solid rgba(237, 231, 218, 0.3);
           border-radius: 6px;
-          padding: 9px 10px;
+          padding: 10px 12px;
           color: var(--text);
           font-size: 14px;
         }
-        .fp-auth-field input:focus { outline: 1px solid var(--brass); }
+        .fp-auth-field input:hover { border-color: rgba(237, 231, 218, 0.45); }
+        .fp-auth-field input:focus {
+          outline: none;
+          border-color: var(--brass);
+          box-shadow: 0 0 0 3px rgba(199, 160, 94, 0.25);
+        }
         .fp-auth-error { color: var(--bad); font-size: 13px; margin-bottom: 12px; }
         .fp-auth-notice { color: var(--good); font-size: 13px; margin-bottom: 12px; }
         .fp-auth-submit {
