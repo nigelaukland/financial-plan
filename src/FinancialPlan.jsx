@@ -46,6 +46,47 @@ function fvSeries({ present, monthly, annualRatePct, years, contributeYears, lum
   return rows; // yearly snapshots, length years+1
 }
 
+// bare numeric input that lets the field sit empty while the user is clearing/retyping it,
+// instead of snapping back to a displayed "0" on every keystroke — only settles to 0 on blur
+function NumberInput({ value, onChange, step = 1, min, max, readOnly = false, className = "fp-input" }) {
+  const [text, setText] = useState(String(value));
+
+  useEffect(() => {
+    const parsedLocal = text === "" || text === "-" ? NaN : parseFloat(text);
+    if (parsedLocal !== value) setText(String(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    setText(raw);
+    if (raw === "" || raw === "-") return;
+    const parsed = parseFloat(raw);
+    if (!Number.isNaN(parsed)) onChange(parsed);
+  };
+
+  const handleBlur = () => {
+    if (text.trim() === "" || text === "-") {
+      setText("0");
+      onChange(0);
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      className={className}
+      value={text}
+      step={step}
+      min={min}
+      max={max}
+      readOnly={readOnly}
+      onChange={readOnly ? undefined : handleChange}
+      onBlur={readOnly ? undefined : handleBlur}
+    />
+  );
+}
+
 function Field({ label, unit, value, onChange, step = 1, min = 0, max, hint, readOnly = false, type = "number" }) {
   const isText = type === "text";
   return (
@@ -53,16 +94,17 @@ function Field({ label, unit, value, onChange, step = 1, min = 0, max, hint, rea
       <span className="fp-label">{label}</span>
       <div className="fp-input-row" style={readOnly ? { opacity: 0.75 } : undefined}>
         {unit === "£" && <span className="fp-unit">£</span>}
-        <input
-          type={type}
-          className="fp-input"
-          value={value}
-          step={isText ? undefined : step}
-          min={isText ? undefined : min}
-          max={isText ? undefined : max}
-          readOnly={readOnly}
-          onChange={readOnly ? undefined : (e) => onChange(isText ? e.target.value : (e.target.value === "" ? 0 : parseFloat(e.target.value)))}
-        />
+        {isText ? (
+          <input
+            type="text"
+            className="fp-input"
+            value={value}
+            readOnly={readOnly}
+            onChange={readOnly ? undefined : (e) => onChange(e.target.value)}
+          />
+        ) : (
+          <NumberInput value={value} onChange={onChange} step={step} min={min} max={max} readOnly={readOnly} />
+        )}
         {unit && unit !== "£" && <span className="fp-unit-suffix">{unit}</span>}
       </div>
       {hint && <span className="fp-hint">{hint}</span>}
@@ -219,13 +261,7 @@ function CategoryCard({ cat, onAddItem, onUpdateItem, onRemoveItem, onRename, on
               />
               <div className="fp-lineitem-amount">
                 <span className="fp-unit">£</span>
-                <input
-                  type="number"
-                  className="fp-input"
-                  value={it.planned}
-                  step={5}
-                  onChange={(e) => onUpdateItem(cat.id, it.id, "planned", e.target.value === "" ? 0 : parseFloat(e.target.value))}
-                />
+                <NumberInput value={it.planned} step={5} onChange={(v) => onUpdateItem(cat.id, it.id, "planned", v)} />
               </div>
               {showActuals && (
                 <div className="fp-lineitem-amount actual">
@@ -791,6 +827,12 @@ export default function FinancialPlan() {
           font-size: 14px;
           padding: 9px 6px;
           width: 100%;
+        }
+        .fp-root input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+        .fp-root input[type="number"]::-webkit-outer-spin-button,
+        .fp-root input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
         }
         .fp-hint { font-size: 11px; color: var(--text-dim); opacity: 0.8; }
 
@@ -1500,13 +1542,7 @@ export default function FinancialPlan() {
               {yAxisMaxEnabled && (
                 <span className="fp-yaxis-input-wrap">
                   <span>£</span>
-                  <input
-                    type="number"
-                    value={yAxisMax}
-                    step={50000}
-                    min={0}
-                    onChange={(e) => setYAxisMax(e.target.value === "" ? 0 : parseFloat(e.target.value))}
-                  />
+                  <NumberInput value={yAxisMax} onChange={setYAxisMax} step={50000} min={0} className="" />
                 </span>
               )}
             </div>
