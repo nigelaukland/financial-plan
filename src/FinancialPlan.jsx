@@ -222,7 +222,7 @@ function PersonPanel({ person, onChange, retireAgeValue, onRetireAgeChange, reti
   );
 }
 
-function CategoryCard({ cat, onAddItem, onUpdateItem, onRemoveItem, onRename, onRemoveCategory, actuals, onSetActual, showActuals }) {
+function CategoryCard({ cat, onAddItem, onUpdateItem, onSetItemAnnual, onSetItemAnnualAmount, onRemoveItem, onRename, onRemoveCategory, actuals, onSetActual, showActuals }) {
   return (
     <div className="fp-panel fp-cat-card">
       <div className="fp-panel-head fp-cat-head">
@@ -261,7 +261,19 @@ function CategoryCard({ cat, onAddItem, onUpdateItem, onRemoveItem, onRename, on
               />
               <div className="fp-lineitem-amount">
                 <span className="fp-unit">£</span>
-                <NumberInput value={it.planned} step={5} onChange={(v) => onUpdateItem(cat.id, it.id, "planned", v)} />
+                {it.annual ? (
+                  <NumberInput value={it.annualAmount ?? 0} step={100} onChange={(v) => onSetItemAnnualAmount(cat.id, it.id, v)} />
+                ) : (
+                  <NumberInput value={it.planned} step={5} onChange={(v) => onUpdateItem(cat.id, it.id, "planned", v)} />
+                )}
+                <button
+                  type="button"
+                  className="fp-freq-toggle"
+                  onClick={() => onSetItemAnnual(cat.id, it.id, !it.annual)}
+                  title={it.annual ? "Paid annually — click to switch to a monthly amount" : "Click to enter this as an annual amount instead"}
+                >
+                  {it.annual ? "/yr" : "/mo"}
+                </button>
               </div>
               {showActuals && (
                 <div className="fp-lineitem-amount actual">
@@ -277,6 +289,9 @@ function CategoryCard({ cat, onAddItem, onUpdateItem, onRemoveItem, onRename, on
                 </div>
               )}
               <button className="fp-remove-btn" onClick={() => onRemoveItem(cat.id, it.id)} aria-label={`Remove ${it.label}`}>×</button>
+              {it.annual && (
+                <span className="fp-annual-equiv">≈ {gbp(it.planned)}/mo</span>
+              )}
             </div>
           );
         })}
@@ -430,7 +445,6 @@ export default function FinancialPlan() {
 
   const [categories, setCategories] = useState(defaultCategories());
   const [actuals, setActuals] = useState({}); // { periodKey: { itemId: number } }
-  const [periodType, setPeriodType] = useState("monthly"); // "monthly" | "quarterly"
   const [periodDate, setPeriodDate] = useState(new Date());
   const [budgetLoaded, setBudgetLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | saved | unavailable
@@ -450,7 +464,6 @@ export default function FinancialPlan() {
         if (actRes && actRes.value) setActuals(JSON.parse(actRes.value));
         if (perRes && perRes.value) {
           const p = JSON.parse(perRes.value);
-          if (p.periodType) setPeriodType(p.periodType);
           if (p.periodDate) setPeriodDate(new Date(p.periodDate));
         }
         if (retRes && retRes.value) applyRetirementState(JSON.parse(retRes.value));
@@ -510,25 +523,17 @@ export default function FinancialPlan() {
 
   useEffect(() => {
     if (!budgetLoaded) return;
-    storage.set("budget-period-v1", JSON.stringify({ periodType, periodDate: periodDate.toISOString() })).catch(() => {});
-  }, [periodType, periodDate, budgetLoaded]);
+    storage.set("budget-period-v1", JSON.stringify({ periodDate: periodDate.toISOString() })).catch(() => {});
+  }, [periodDate, budgetLoaded]);
 
-  const periodKey = (date, type) => {
-    if (type === "monthly") return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    const q = Math.floor(date.getMonth() / 3) + 1;
-    return `${date.getFullYear()}-Q${q}`;
-  };
-  const periodLabel = (date, type) => {
-    if (type === "monthly") return date.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-    const q = Math.floor(date.getMonth() / 3) + 1;
-    return `Q${q} ${date.getFullYear()}`;
-  };
+  const periodKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const periodLabel = (date) => date.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   const shiftPeriod = (dir) => {
     const d = new Date(periodDate);
-    d.setMonth(d.getMonth() + (periodType === "monthly" ? dir : dir * 3));
+    d.setMonth(d.getMonth() + dir);
     setPeriodDate(d);
   };
-  const currentKey = periodKey(periodDate, periodType);
+  const currentKey = periodKey(periodDate);
   const currentActuals = actuals[currentKey] || {};
   const setActual = (itemId, value) => {
     setActuals((prev) => ({ ...prev, [currentKey]: { ...(prev[currentKey] || {}), [itemId]: value } }));
@@ -546,6 +551,24 @@ export default function FinancialPlan() {
   };
   const updateItem = (catId, itemId, field, value) => {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, items: c.items.map((it) => (it.id === itemId ? { ...it, [field]: value } : it)) } : c)));
+  };
+  // items are stored monthly (`planned`) throughout the app; an "annual" item instead
+  // tracks its own `annualAmount` and keeps `planned` in sync as that value ÷ 12, so
+  // every downstream total/chart/variance calc can keep reading `planned` unchanged
+  const setItemAnnual = (catId, itemId, annual) => {
+    setCategories((prev) => prev.map((c) => (c.id !== catId ? c : {
+      ...c, items: c.items.map((it) => {
+        if (it.id !== itemId) return it;
+        if (!annual) return { ...it, annual: false };
+        const annualAmount = it.annualAmount ?? Math.round((it.planned || 0) * 12 * 100) / 100;
+        return { ...it, annual: true, annualAmount, planned: Math.round((annualAmount / 12) * 100) / 100 };
+      }),
+    })));
+  };
+  const setItemAnnualAmount = (catId, itemId, amount) => {
+    setCategories((prev) => prev.map((c) => (c.id !== catId ? c : {
+      ...c, items: c.items.map((it) => (it.id === itemId ? { ...it, annualAmount: amount, planned: Math.round((amount / 12) * 100) / 100 } : it)),
+    })));
   };
   const removeItem = (catId, itemId) => {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, items: c.items.filter((it) => it.id !== itemId) } : c)));
@@ -1043,7 +1066,7 @@ export default function FinancialPlan() {
 
         .fp-item-col-heads {
           display: grid;
-          grid-template-columns: 1fr 100px 100px 24px;
+          grid-template-columns: 1fr 122px 100px 24px;
           gap: 8px;
           font-family: 'IBM Plex Mono', monospace;
           font-size: 10px;
@@ -1054,11 +1077,11 @@ export default function FinancialPlan() {
         }
         .fp-item-row {
           display: grid;
-          grid-template-columns: 1fr 100px 24px;
+          grid-template-columns: 1fr 122px 24px;
           align-items: center;
           gap: 8px;
         }
-        .fp-item-row.with-actuals { grid-template-columns: 1fr 100px 100px 24px; }
+        .fp-item-row.with-actuals { grid-template-columns: 1fr 122px 100px 24px; }
         .fp-lineitem-label-input {
           background: transparent;
           border: none;
@@ -1080,6 +1103,26 @@ export default function FinancialPlan() {
         }
         .fp-lineitem-amount.actual { border-color: var(--teal); }
         .fp-lineitem-amount .fp-input { padding: 6px 4px; font-size: 13px; }
+        .fp-freq-toggle {
+          background: transparent;
+          border: none;
+          color: var(--text-dim);
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 11px;
+          padding: 2px;
+          cursor: pointer;
+          text-decoration: underline dashed;
+          text-underline-offset: 2px;
+          flex-shrink: 0;
+        }
+        .fp-freq-toggle:hover { color: var(--brass); }
+        .fp-annual-equiv {
+          grid-column: 1 / -1;
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 11px;
+          color: var(--text-dim);
+          margin-top: -4px;
+        }
         .fp-remove-btn {
           background: transparent;
           border: 1px solid var(--rule);
@@ -1627,12 +1670,8 @@ export default function FinancialPlan() {
       <div className="fp-period-bar">
         <div className="fp-period-nav">
           <button className="fp-period-btn" onClick={() => shiftPeriod(-1)} aria-label="Previous period">‹</button>
-          <span className="fp-period-label">{periodLabel(periodDate, periodType)}</span>
+          <span className="fp-period-label">{periodLabel(periodDate)}</span>
           <button className="fp-period-btn" onClick={() => shiftPeriod(1)} aria-label="Next period">›</button>
-          <div className="fp-period-type">
-            <button className={periodType === "monthly" ? "active" : ""} onClick={() => setPeriodType("monthly")}>Monthly</button>
-            <button className={periodType === "quarterly" ? "active" : ""} onClick={() => setPeriodType("quarterly")}>Quarterly</button>
-          </div>
         </div>
         <span className={`fp-save-status ${saveStatus}`}>
           {saveStatus === "saving" && "Saving…"}
@@ -1644,7 +1683,7 @@ export default function FinancialPlan() {
       <div className="fp-budget-grid" style={{ marginTop: 14 }}>
         <div className="fp-col">
           <div className="fp-note" style={{ borderTop: "none", paddingTop: 0, maxWidth: 480 }}>
-            Planned figures carry over between periods. Actuals are entered per {periodType === "monthly" ? "month" : "quarter"} —
+            Planned figures carry over between periods. Actuals are entered per month —
             switch periods above to log a different one; nothing you've already entered gets overwritten.
           </div>
           {categories.map((cat) => (
@@ -1655,6 +1694,8 @@ export default function FinancialPlan() {
               showActuals
               onAddItem={addItem}
               onUpdateItem={updateItem}
+              onSetItemAnnual={setItemAnnual}
+              onSetItemAnnualAmount={setItemAnnualAmount}
               onRemoveItem={removeItem}
               onRename={renameCategory}
               onRemoveCategory={removeCategory}
@@ -1671,7 +1712,7 @@ export default function FinancialPlan() {
                 ? `Planned income covers planned outgoings, with a monthly surplus left over.`
                 : `Planned outgoings currently run ahead of planned income.`}
               {budgetCalc.anyActuals && (
-                <> Actuals logged so far this {periodType === "monthly" ? "month" : "quarter"} put you at {budgetCalc.surplusActual >= 0 ? "+" : "−"}{gbp(Math.abs(budgetCalc.surplusActual))}.</>
+                <> Actuals logged so far this month put you at {budgetCalc.surplusActual >= 0 ? "+" : "−"}{gbp(Math.abs(budgetCalc.surplusActual))}.</>
               )}
             </div>
             <div className={`fp-verdict-num ${budgetBalanced ? "good" : "bad"}`}>
@@ -1680,7 +1721,7 @@ export default function FinancialPlan() {
           </div>
 
           <div className="fp-chart-card">
-            <div className="fp-chart-title">Planned vs. actual, {periodLabel(periodDate, periodType)}</div>
+            <div className="fp-chart-title">Planned vs. actual, {periodLabel(periodDate)}</div>
             <div className="fp-chart-sub">
               {budgetCalc.anyActuals
                 ? "Bars compare what you budgeted against what you've logged for this period so far."
@@ -1699,7 +1740,7 @@ export default function FinancialPlan() {
             </ResponsiveContainer>
           </div>
 
-          <Section eyebrow="Summary" title={`${periodType === "monthly" ? "Monthly" : "Quarterly"} position`}>
+          <Section eyebrow="Summary" title="Monthly position">
             <div className="fp-two-col">
               <Field label="Total planned income" unit="£" value={Math.round(budgetCalc.totalIncomePlanned)} onChange={() => {}} readOnly />
               <Field label="Total planned outgoings" unit="£" value={Math.round(budgetCalc.totalExpensePlanned)} onChange={() => {}} readOnly />
@@ -1779,7 +1820,8 @@ export default function FinancialPlan() {
         <Section eyebrow="Household budget tab" title="Planned vs actual">
           <ul className="fp-bullet-list">
             <li>Income and expenses are grouped into editable categories, each with line items you can add, rename, or remove.</li>
-            <li>Switch between monthly and quarterly periods, and step back/forward through them — planned figures carry over between periods, but actuals are tracked per period so nothing you've logged gets overwritten.</li>
+            <li>Any line item can be switched between a monthly and an annual amount using the "/mo"/"/yr" toggle next to its figure — useful for things like an annual bonus on the Income category. Annual amounts are shown converted to their monthly equivalent everywhere else in the app (category totals, charts, summary), since every other figure is monthly.</li>
+            <li>Step back/forward through months with the period bar — planned figures carry over between periods, but actuals are tracked per period so nothing you've logged gets overwritten.</li>
             <li>The chart and variance table compare what you planned against what you've actually logged for the current period.</li>
           </ul>
         </Section>
