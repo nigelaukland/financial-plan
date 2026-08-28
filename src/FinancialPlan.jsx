@@ -1750,7 +1750,7 @@ export default function FinancialPlan() {
       <div className="fp-about-wrap">
         <Section eyebrow="Overview" title="How this tool works">
           <ul className="fp-bullet-list">
-            <li>Sign in with your household account to use the tool — data is saved to a shared backend, not just this browser, so it follows you across devices and both of you see the same numbers. Your household is the only account with access.</li>
+            <li>Sign in with your account to use the tool — data is saved to a backend, not just this browser, so it follows you across devices. Your account is the only one with access.</li>
             <li>Two tabs handle different questions: <strong>Retirement plan</strong> projects your pension/savings pots forward to see if you're on track, and <strong>Household budget</strong> tracks monthly planned-vs-actual spending. They're independent — the budget tab has its own "use this total on the Retirement tab" button if you want to sync the outgoings figure, but nothing else crosses over automatically.</li>
           </ul>
         </Section>
