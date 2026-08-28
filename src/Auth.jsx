@@ -246,27 +246,46 @@ function SetNewPasswordForm({ onDone }) {
   );
 }
 
-export function SignOutButton() {
+export function SignOutButton({ email }) {
   return (
-    <button
-      onClick={() => supabase.auth.signOut()}
+    <div
       style={{
         position: "fixed",
         top: 14,
         right: 18,
         zIndex: 50,
-        background: "var(--panel-2)",
-        color: "var(--text-dim)",
-        border: "1px solid var(--rule)",
-        borderRadius: 6,
-        padding: "6px 12px",
-        fontSize: 12,
-        fontFamily: "'IBM Plex Mono', monospace",
-        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
       }}
     >
-      Sign out
-    </button>
+      {email && (
+        <span
+          style={{
+            color: "var(--text-dim)",
+            fontSize: 12,
+            fontFamily: "'IBM Plex Mono', monospace",
+          }}
+        >
+          {email}
+        </span>
+      )}
+      <button
+        onClick={() => supabase.auth.signOut()}
+        style={{
+          background: "var(--panel-2)",
+          color: "var(--text-dim)",
+          border: "1px solid var(--rule)",
+          borderRadius: 6,
+          padding: "6px 12px",
+          fontSize: 12,
+          fontFamily: "'IBM Plex Mono', monospace",
+          cursor: "pointer",
+        }}
+      >
+        Sign out
+      </button>
+    </div>
   );
 }
 
@@ -301,7 +320,7 @@ export function AuthGate({ children }) {
 
   return (
     <>
-      <SignOutButton />
+      <SignOutButton email={session.user?.email} />
       {children}
     </>
   );
