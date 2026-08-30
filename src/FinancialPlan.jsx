@@ -134,13 +134,25 @@ function Slider({ label, value, onChange, min, max, step = 1, display, hint }) {
 }
 
 function Section({ eyebrow, title, children }) {
+  const [open, setOpen] = useState(true);
+  const toggle = () => setOpen((o) => !o);
   return (
     <div className="fp-panel">
-      <div className="fp-panel-head">
-        <span className="fp-eyebrow">{eyebrow}</span>
-        <h3 className="fp-panel-title">{title}</h3>
+      <div
+        className="fp-panel-head fp-panel-head-clickable"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={toggle}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
+      >
+        <div>
+          <span className="fp-eyebrow">{eyebrow}</span>
+          <h3 className="fp-panel-title">{title}</h3>
+        </div>
+        <span className={`fp-panel-chevron ${open ? "open" : ""}`} aria-hidden="true">⌄</span>
       </div>
-      <div className="fp-panel-body">{children}</div>
+      {open && <div className="fp-panel-body">{children}</div>}
     </div>
   );
 }
@@ -223,21 +235,41 @@ function PersonPanel({ person, onChange, retireAgeValue, onRetireAgeChange, reti
 }
 
 function CategoryCard({ cat, onAddItem, onUpdateItem, onSetItemAnnual, onSetItemAnnualAmount, onRemoveItem, onRename, onRemoveCategory, actuals, onSetActual, showActuals }) {
+  const [open, setOpen] = useState(true);
+  const toggle = () => setOpen((o) => !o);
+  const total = cat.items.reduce((s, i) => s + (Number(i.planned) || 0), 0);
   return (
     <div className="fp-panel fp-cat-card">
-      <div className="fp-panel-head fp-cat-head">
+      <div
+        className="fp-panel-head fp-cat-head fp-panel-head-clickable"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={toggle}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}
+      >
         <div>
           <span className="fp-eyebrow">{cat.type === "income" ? "Income" : "Expense"}</span>
           <input
             className="fp-cat-name-input"
             value={cat.name}
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => onRename(cat.id, e.target.value)}
           />
         </div>
-        {cat.id !== "income" && (
-          <button className="fp-remove-btn" onClick={() => onRemoveCategory(cat.id)} aria-label={`Remove ${cat.name}`}>×</button>
-        )}
+        <div className="fp-cat-head-right">
+          <span className="fp-cat-head-total">{gbp(total)}/mo</span>
+          {cat.id !== "income" && (
+            <button
+              className="fp-remove-btn"
+              onClick={(e) => { e.stopPropagation(); onRemoveCategory(cat.id); }}
+              aria-label={`Remove ${cat.name}`}
+            >×</button>
+          )}
+          <span className={`fp-panel-chevron ${open ? "open" : ""}`} aria-hidden="true">⌄</span>
+        </div>
       </div>
+      {open && (
       <div className="fp-panel-body">
         {showActuals && (
           <div className="fp-item-col-heads">
@@ -298,10 +330,11 @@ function CategoryCard({ cat, onAddItem, onUpdateItem, onSetItemAnnual, onSetItem
         <div className="fp-lineitem-footer">
           <button className="fp-add-btn" onClick={() => onAddItem(cat.id)}>+ Add item</button>
           <span className="fp-lineitem-total">
-            Planned {gbp(cat.items.reduce((s, i) => s + (Number(i.planned) || 0), 0))}/mo
+            Planned {gbp(total)}/mo
           </span>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -806,7 +839,22 @@ export default function FinancialPlan() {
         .fp-panel-head {
           padding: 14px 16px 10px;
           border-bottom: 1px solid var(--rule);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
         }
+        .fp-panel-head-clickable { cursor: pointer; user-select: none; }
+        .fp-panel-head-clickable:hover .fp-panel-title { color: var(--brass); }
+        .fp-panel-head-clickable:focus-visible { outline: 2px solid var(--brass-dim); outline-offset: -2px; }
+        .fp-panel-chevron {
+          font-size: 16px;
+          color: var(--text-dim);
+          flex-shrink: 0;
+          transition: transform 0.15s ease;
+          transform: rotate(-90deg);
+        }
+        .fp-panel-chevron.open { transform: rotate(0deg); }
         .fp-eyebrow {
           font-family: 'IBM Plex Mono', monospace;
           font-size: 10px;
@@ -1048,6 +1096,18 @@ export default function FinancialPlan() {
           justify-content: space-between;
           align-items: flex-start;
           gap: 10px;
+        }
+        .fp-cat-head-right {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+        .fp-cat-head-total {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 12px;
+          color: var(--text-dim);
+          white-space: nowrap;
         }
         .fp-cat-name-input {
           display: block;
@@ -1793,6 +1853,7 @@ export default function FinancialPlan() {
           <ul className="fp-bullet-list">
             <li>Sign in with your account to use the tool — data is saved to a backend, not just this browser, so it follows you across devices. Your account is the only one with access.</li>
             <li>Two tabs handle different questions: <strong>Retirement plan</strong> projects your pension/savings pots forward to see if you're on track, and <strong>Household budget</strong> tracks monthly planned-vs-actual spending. They're independent — the budget tab has its own "use this total on the Retirement tab" button if you want to sync the outgoings figure, but nothing else crosses over automatically.</li>
+            <li>Every panel's header can be clicked (or focused and pressed with Enter/Space) to collapse or expand it — useful for tucking away sections you're not currently using.</li>
           </ul>
         </Section>
 
