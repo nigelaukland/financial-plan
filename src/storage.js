@@ -3,6 +3,7 @@
 // Data is a single shared household row per key (see plan_data schema) —
 // either signed-in account can read/write all of it.
 import { supabase } from "./supabaseClient";
+import { DEV_BYPASS_AUTH } from "./devBypass";
 
 // One-time fallback: if Supabase has no row yet for a key but this browser's
 // localStorage does (pre-migration data), adopt it and push it up once.
@@ -15,6 +16,10 @@ async function migrateFromLocalStorage(key) {
 
 export const storage = {
   async get(key) {
+    if (DEV_BYPASS_AUTH) {
+      const local = localStorage.getItem(key);
+      return local === null ? null : { value: local };
+    }
     const { data, error } = await supabase
       .from("plan_data")
       .select("value")
@@ -27,6 +32,10 @@ export const storage = {
     return migrated === null ? null : { value: migrated };
   },
   async set(key, value) {
+    if (DEV_BYPASS_AUTH) {
+      localStorage.setItem(key, value);
+      return;
+    }
     const {
       data: { user },
     } = await supabase.auth.getUser();

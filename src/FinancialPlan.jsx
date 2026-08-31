@@ -9,6 +9,14 @@ import { storage } from "./storage";
 const gbp = (n, dp = 0) =>
   "£" + Math.round(n).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp });
 const gbpK = (n) => "£" + (n / 1000).toFixed(0) + "k";
+const formatSavedAt = (ms) => {
+  const diffMin = Math.round((Date.now() - ms) / 60000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const d = new Date(ms);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }) +
+    ", " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+};
 
 // custom tooltip: shows each series plus a computed total, since Recharts' own payload
 // aggregation can't be relied on to include an extra series added just for a total
@@ -391,6 +399,7 @@ export default function FinancialPlan() {
   const [retirementLoaded, setRetirementLoaded] = useState(false);
   const [scenarios, setScenarios] = useState({}); // { name: retirementStateObject }
   const [scenarioName, setScenarioName] = useState("");
+  const [loadedScenario, setLoadedScenario] = useState(null); // name of the scenario currently on screen, if any
 
   const getRetirementState = () => ({
     a1, a2, monthlyOutgoings, houseValue, mortgageBalance, mortgagePayment, mortgageYearsLeft,
@@ -422,15 +431,25 @@ export default function FinancialPlan() {
     if (s.a2TargetRetireAge !== undefined) setA2TargetRetireAge(s.a2TargetRetireAge);
     if (s.desiredIncome !== undefined) setDesiredIncome(s.desiredIncome);
   };
+  const scenarioIsUnchanged = (name) => {
+    const s = scenarios[name];
+    if (!s) return false;
+    const { savedAt, ...savedState } = s;
+    return JSON.stringify(savedState) === JSON.stringify(getRetirementState());
+  };
   const saveScenario = () => {
     const name = scenarioName.trim();
     if (!name) return;
-    setScenarios((prev) => ({ ...prev, [name]: getRetirementState() }));
+    const overwriting = Object.prototype.hasOwnProperty.call(scenarios, name);
+    if (overwriting && !window.confirm(`Overwrite the existing scenario "${name}" with the numbers currently on screen?`)) return;
+    setScenarios((prev) => ({ ...prev, [name]: { ...getRetirementState(), savedAt: Date.now() } }));
     setScenarioName("");
+    setLoadedScenario(name);
   };
   const loadScenario = (name) => {
     applyRetirementState(scenarios[name]);
     setScenarioName(name);
+    setLoadedScenario(name);
   };
   const deleteScenario = (name) => {
     setScenarios((prev) => {
@@ -438,6 +457,7 @@ export default function FinancialPlan() {
       delete next[name];
       return next;
     });
+    setLoadedScenario((prev) => (prev === name ? null : prev));
   };
 
   // --- household budget: dynamic categories, tracked per period, persisted ---
@@ -1299,6 +1319,31 @@ export default function FinancialPlan() {
           font-size: 11px;
           color: var(--text-dim);
         }
+        .fp-scenario-active {
+          font-size: 12px;
+          padding: 7px 10px;
+          border-radius: 3px;
+          margin-bottom: 10px;
+          border: 1px solid var(--rule);
+        }
+        .fp-scenario-active.clean { color: var(--good); border-color: rgba(123,163,131,0.35); }
+        .fp-scenario-active.dirty { color: var(--bad); border-color: rgba(192,106,87,0.35); }
+        .fp-scenario-row-active { border-bottom-color: var(--brass-dim); }
+        .fp-scenario-badge {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 9px;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--brass);
+          border: 1px solid var(--brass-dim);
+          border-radius: 3px;
+          padding: 1px 5px;
+          margin-left: 8px;
+          vertical-align: middle;
+        }
+        .fp-sync-btn-overwrite { color: var(--bad); border-color: var(--bad); }
+        .fp-sync-btn-overwrite:hover { background: rgba(192,106,87,0.1); }
+        .fp-hint-warn { color: var(--bad); opacity: 1; display: block; margin-top: -2px; margin-bottom: 8px; }
 
         .fp-checkbox-row { display: flex; align-items: center; gap: 8px; }
         .fp-checkbox { width: 15px; height: 15px; accent-color: var(--brass); cursor: pointer; }
@@ -1477,6 +1522,14 @@ export default function FinancialPlan() {
         {/* LEFT: INPUTS */}
         <div className="fp-col">
           <Section eyebrow="Scenarios" title="Save & compare">
+            {loadedScenario && scenarios[loadedScenario] && (
+              <div className={`fp-scenario-active ${scenarioIsUnchanged(loadedScenario) ? "clean" : "dirty"}`}>
+                Editing <strong>{loadedScenario}</strong>
+                {scenarioIsUnchanged(loadedScenario)
+                  ? " — matches the saved scenario"
+                  : " — changed since it was saved"}
+              </div>
+            )}
             <div className="fp-scenario-save">
               <input
                 className="fp-scenario-name-input"
@@ -1486,22 +1539,40 @@ export default function FinancialPlan() {
                 onChange={(e) => setScenarioName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") saveScenario(); }}
               />
-              <button className="fp-sync-btn" onClick={saveScenario} disabled={!scenarioName.trim()}>Save current</button>
+              <button
+                className={`fp-sync-btn ${Object.prototype.hasOwnProperty.call(scenarios, scenarioName.trim()) ? "fp-sync-btn-overwrite" : ""}`}
+                onClick={saveScenario}
+                disabled={!scenarioName.trim()}
+              >
+                {Object.prototype.hasOwnProperty.call(scenarios, scenarioName.trim())
+                  ? `Overwrite "${scenarioName.trim()}"`
+                  : "Save current"}
+              </button>
             </div>
+            {Object.prototype.hasOwnProperty.call(scenarios, scenarioName.trim()) && (
+              <span className="fp-hint fp-hint-warn">
+                A scenario named "{scenarioName.trim()}" already exists — saving will replace its numbers with what's on screen now.
+              </span>
+            )}
             {Object.keys(scenarios).length === 0 ? (
               <span className="fp-hint">No scenarios saved yet — dial in the numbers below, then save this as a named scenario to compare later.</span>
             ) : (
               <div className="fp-scenario-list">
                 {Object.keys(scenarios).sort().map((name) => {
                   const s = scenarios[name];
+                  const isActive = name === loadedScenario;
                   return (
-                    <div className="fp-scenario-row" key={name}>
+                    <div className={`fp-scenario-row ${isActive ? "fp-scenario-row-active" : ""}`} key={name}>
                       <div className="fp-scenario-info">
-                        <span className="fp-scenario-name">{name}</span>
+                        <span className="fp-scenario-name">
+                          {name}
+                          {isActive && <span className="fp-scenario-badge">loaded</span>}
+                        </span>
                         <span className="fp-scenario-meta">
                           {s.targetRetireAge !== undefined && `Retire at ${s.targetRetireAge}`}
                           {s.targetRetireAge !== undefined && s.desiredIncome !== undefined && " · "}
                           {s.desiredIncome !== undefined && `${gbp(s.desiredIncome)}/yr`}
+                          {s.savedAt && ` · saved ${formatSavedAt(s.savedAt)}`}
                         </span>
                       </div>
                       <button className="fp-add-btn" onClick={() => loadScenario(name)}>Load</button>

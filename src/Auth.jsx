@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { DEV_BYPASS_AUTH, DEV_BYPASS_EMAIL } from "./devBypass";
 
 function AuthShell({ title, children }) {
   return (
@@ -271,7 +272,7 @@ export function SignOutButton({ email }) {
         </span>
       )}
       <button
-        onClick={() => supabase.auth.signOut()}
+        onClick={() => (DEV_BYPASS_AUTH ? window.location.reload() : supabase.auth.signOut())}
         style={{
           background: "var(--panel-2)",
           color: "var(--text-dim)",
@@ -289,12 +290,15 @@ export function SignOutButton({ email }) {
   );
 }
 
+const DEV_BYPASS_SESSION = { user: { email: DEV_BYPASS_EMAIL } };
+
 export function AuthGate({ children }) {
-  const [session, setSession] = useState(undefined); // undefined = loading, null = signed out
+  const [session, setSession] = useState(DEV_BYPASS_AUTH ? DEV_BYPASS_SESSION : undefined); // undefined = loading, null = signed out
   const [recovery, setRecovery] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
 
   useEffect(() => {
+    if (DEV_BYPASS_AUTH) return;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") setRecovery(true);
